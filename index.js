@@ -62,6 +62,11 @@ async function run() {
       const result = await testsCollection.find().toArray();
       res.send(result);
     });
+    app.post("/tests",verifyToken, async (req,res) => {
+      const test = req.body;
+      const result = await testsCollection.insertOne(test);
+      res.send(result);
+    })
     // get single test data
     app.get("/test/:id", async (req, res) => {
       const id = req.params.id;
