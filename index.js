@@ -51,6 +51,17 @@ async function run() {
         next();
       });
     };
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "unauthorized access" });
+      }
+      next();
+    }
+    
     // users api
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -62,12 +73,12 @@ async function run() {
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-    app.get('/users', async (req, res) => {
+    app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
     })
 
-    app.patch('/users/admin/:id', async (req, res) => {
+    app.patch('/users/admin/:id',verifyToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = {_id: new ObjectId(id)}
       const updatedDoc = {
@@ -76,12 +87,18 @@ async function run() {
       const result = await usersCollection.updateOne(filter, updatedDoc);
       res.send(result);
     })
-    app.get('/users/admin/:email', verifyToken, async(req, res)=>{
+    app.get('/users/admin/:email', verifyToken,verifyAdmin, async(req, res)=>{
       const email = req.params.email
      if (email !== req.decoded.email) {
       return res.status(403).send({ message: "unauthorized access" })
      }
-      const quer
+     const query = { email: email };
+     const user = await usersCollection.findOne(query);
+     let admin = false;
+     if (user) {
+       admin = user?.role === "admin";
+     }
+     res.send({ admin });
     })
    
 
@@ -90,12 +107,12 @@ async function run() {
       const result = await testsCollection.find().toArray();
       res.send(result);
     });
-    app.post("/tests",verifyToken, async (req,res) => {
+    app.post("/tests",verifyToken,verifyAdmin, async (req,res) => {
       const test = req.body;
       const result = await testsCollection.insertOne(test);
       res.send(result);
     })
-    app.delete("/tests/:id",verifyToken, async (req, res) => {
+    app.delete("/tests/:id",verifyToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await testsCollection.deleteOne(query);
