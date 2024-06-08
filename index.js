@@ -67,6 +67,25 @@ async function run() {
       res.send(result);
     })
 
+    app.patch('/users/admin/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)}
+      const updatedDoc = {
+        $set: { role: "admin" },
+      };
+      const result = await usersCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    })
+    app.get('/users/admin/:email', verifyToken, async(req, res)=>{
+      const email = req.params.email
+     if (email !== req.decoded.email) {
+      return res.status(403).send({ message: "unauthorized access" })
+     }
+      const quer
+    })
+   
+
+
     app.get("/tests", async (req, res) => {
       const result = await testsCollection.find().toArray();
       res.send(result);
