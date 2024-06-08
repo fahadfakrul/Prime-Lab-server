@@ -67,6 +67,14 @@ async function run() {
       const result = await testsCollection.insertOne(test);
       res.send(result);
     })
+    app.delete("/tests/:id",verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await testsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    
     // get single test data
     app.get("/test/:id", async (req, res) => {
       const id = req.params.id;
