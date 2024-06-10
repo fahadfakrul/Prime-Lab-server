@@ -1,8 +1,10 @@
 const express = require("express");
 const app = express();
+require("dotenv").config();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -29,6 +31,7 @@ async function run() {
     const testsCollection = client.db("primeLabDB").collection("tests");
     const usersCollection = client.db("primeLabDB").collection("users");
     const bannerCollection = client.db("primeLabDB").collection("banner");
+    const reservationsCollection = client.db("primeLabDB").collection("reservations");
     // jwt related api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -142,6 +145,21 @@ async function run() {
       res.send(result);
     });
 
+    // create-payment-intent
+    app.post("/create-payment-intent",verifyToken, async (req, res) => {
+      const {price} = req.body;
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"]
+        
+       
+    })
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  })
     app.get("/tests", async (req, res) => {
       const result = await testsCollection.find().toArray();
       res.send(result);
@@ -169,6 +187,40 @@ async function run() {
       const banner = req.body;
       const result = await bannerCollection.insertOne(banner);
       res.send(result);
+    });
+    app.get("/banners", async (req, res) => {
+      const result = await bannerCollection.find().toArray();
+      res.send(result);
+    });
+    app.patch("/banners/:id", async (req, res) => {
+      
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      try {
+        await bannerCollection.updateMany({}, { $set: { isActive: false } });
+    const updatedDoc = {
+          $set: {
+            isActive: true,
+          },
+        };
+        const result = await bannerCollection.updateOne(filter, updatedDoc);
+     res.send(result);
+      } catch (error) {
+        console.log(error.message);
+      }
+    });
+
+    app.post("/reservations", verifyToken, async (req, res) => {
+      const reservations = req.body;
+      const result = await reservationsCollection.insertOne(reservations);
+      const testId = reservations?.testId
+      const query = {_id: new ObjectId(testId)}
+      const updatedDoc = {
+        $inc: { slots: -1 },
+      }
+      const updatedTest = await testsCollection.updateOne(query, updatedDoc);
+      console.log(updatedTest)
+      res.send({result, updatedTest});
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
