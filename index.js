@@ -28,6 +28,7 @@ async function run() {
 
     const testsCollection = client.db("primeLabDB").collection("tests");
     const usersCollection = client.db("primeLabDB").collection("users");
+    const bannerCollection = client.db("primeLabDB").collection("banner");
     // jwt related api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -38,7 +39,7 @@ async function run() {
     });
     // middlewares
     const verifyToken = (req, res, next) => {
-      console.log("inside verify token", req.headers);
+      // console.log("inside verify token", req.headers);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "Forbidden" });
       }
@@ -60,73 +61,115 @@ async function run() {
         return res.status(403).send({ message: "unauthorized access" });
       }
       next();
-    }
-    
+    };
+
     // users api
     app.post("/users", async (req, res) => {
       const user = req.body;
-      const query = { email: user.email}
+      const query = { email: user.email };
       const existingUser = await usersCollection.findOne(query);
-      if(existingUser) {
-        return res.send({ message: "user already exists" , insertedId: null});
+      if (existingUser) {
+        return res.send({ message: "user already exists", insertedId: null });
       }
       const result = await usersCollection.insertOne(user);
       res.send(result);
     });
-    app.get('/users',verifyToken,verifyAdmin, async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
-    })
-
-    app.patch('/users/admin/:id',verifyToken,verifyAdmin, async (req, res) => {
-      const id = req.params.id;
-      const filter = {_id: new ObjectId(id)}
+    });
+    app.patch("/users/:email", async (req, res) => {
+      const user = req.body;
+      const email = req.params.email;
+      const filter = { email: email };
       const updatedDoc = {
-        $set: { role: "admin" },
+        $set: {
+          name: user.name,
+          bloodGroup: user.bloodGroup,
+          district: user.district,
+          upazila: user.upazila,
+          photoURL: user.photoURL,
+        },
       };
       const result = await usersCollection.updateOne(filter, updatedDoc);
       res.send(result);
-    })
-    app.get('/users/admin/:email', verifyToken,verifyAdmin, async(req, res)=>{
-      const email = req.params.email
-     if (email !== req.decoded.email) {
-      return res.status(403).send({ message: "unauthorized access" })
-     }
-     const query = { email: email };
-     const user = await usersCollection.findOne(query);
-     let admin = false;
-     if (user) {
-       admin = user?.role === "admin";
-     }
-     res.send({ admin });
-    })
-   
+    });
 
+    app.patch(
+      "/users/:action/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const action = req.params.action;
+        const filter = { _id: new ObjectId(id) };
+        let updatedDoc;
+
+        if (action === "admin") {
+          updatedDoc = { $set: { role: "admin" } };
+        } else if (action === "block") {
+           updatedDoc = { $set: { status: "blocked" } };
+        } else {
+          return res.status(400).send({ error: "Invalid action" });
+        }
+        
+        const result = await usersCollection.updateOne(filter, updatedDoc);
+        res.send(result);
+      }
+    );
+    app.get(
+      "/users/admin/:email",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const email = req.params.email;
+        if (email !== req.decoded.email) {
+          return res.status(403).send({ message: "unauthorized access" });
+        }
+        const query = { email: email };
+        const user = await usersCollection.findOne(query);
+        let admin = false;
+        if (user) {
+          admin = user?.role === "admin";
+        }
+        res.send({ admin });
+      }
+    );
+
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ email });
+      res.send(result);
+    });
 
     app.get("/tests", async (req, res) => {
       const result = await testsCollection.find().toArray();
       res.send(result);
     });
-    app.post("/tests",verifyToken,verifyAdmin, async (req,res) => {
+    app.post("/tests", verifyToken, verifyAdmin, async (req, res) => {
       const test = req.body;
       const result = await testsCollection.insertOne(test);
       res.send(result);
-    })
-    app.delete("/tests/:id",verifyToken,verifyAdmin, async (req, res) => {
+    });
+    app.delete("/tests/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await testsCollection.deleteOne(query);
       res.send(result);
     });
 
-    
     // get single test data
     app.get("/test/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const result = await testsCollection.findOne(query);
       res.send(result);
-    })
+    });
+    app.post("/banner", verifyToken, verifyAdmin, async (req, res) => {
+      const banner = req.body;
+      const result = await bannerCollection.insertOne(banner);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
