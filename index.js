@@ -31,7 +31,9 @@ async function run() {
     const testsCollection = client.db("primeLabDB").collection("tests");
     const usersCollection = client.db("primeLabDB").collection("users");
     const bannerCollection = client.db("primeLabDB").collection("banner");
-    const reservationsCollection = client.db("primeLabDB").collection("reservations");
+    const reservationsCollection = client
+      .db("primeLabDB")
+      .collection("reservations");
     // jwt related api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -111,11 +113,11 @@ async function run() {
         if (action === "admin") {
           updatedDoc = { $set: { role: "admin" } };
         } else if (action === "block") {
-           updatedDoc = { $set: { status: "blocked" } };
+          updatedDoc = { $set: { status: "blocked" } };
         } else {
           return res.status(400).send({ error: "Invalid action" });
         }
-        
+
         const result = await usersCollection.updateOne(filter, updatedDoc);
         res.send(result);
       }
@@ -146,20 +148,18 @@ async function run() {
     });
 
     // create-payment-intent
-    app.post("/create-payment-intent",verifyToken, async (req, res) => {
-      const {price} = req.body;
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
+      const { price } = req.body;
       const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: "usd",
-        payment_method_types: ["card"]
-        
-       
-    })
-    res.send({
-      clientSecret: paymentIntent.client_secret,
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
     });
-  })
     app.get("/tests", async (req, res) => {
       const result = await testsCollection.find().toArray();
       res.send(result);
@@ -193,18 +193,17 @@ async function run() {
       res.send(result);
     });
     app.patch("/banners/:id", async (req, res) => {
-      
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       try {
         await bannerCollection.updateMany({}, { $set: { isActive: false } });
-    const updatedDoc = {
+        const updatedDoc = {
           $set: {
             isActive: true,
           },
         };
         const result = await bannerCollection.updateOne(filter, updatedDoc);
-     res.send(result);
+        res.send(result);
       } catch (error) {
         console.log(error.message);
       }
@@ -213,15 +212,52 @@ async function run() {
     app.post("/reservations", verifyToken, async (req, res) => {
       const reservations = req.body;
       const result = await reservationsCollection.insertOne(reservations);
-      const testId = reservations?.testId
-      const query = {_id: new ObjectId(testId)}
+      const testId = reservations?.testId;
+      const query = { _id: new ObjectId(testId) };
       const updatedDoc = {
         $inc: { slots: -1 },
-      }
+      };
       const updatedTest = await testsCollection.updateOne(query, updatedDoc);
-      console.log(updatedTest)
-      res.send({result, updatedTest});
+      console.log(updatedTest);
+      res.send({ result, updatedTest });
     });
+
+    app.get("/reservations", verifyToken,  async (req, res) => {
+      const result = await reservationsCollection.find().toArray();
+      res.send(result);
+    });
+    app.delete(
+      "/reservations/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await reservationsCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
+    app.get("/reservations/:email", verifyToken,  async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email, reportStatus: "delivered" };
+      const result = await reservationsCollection.find(query).toArray();
+      res.send(result);
+    });
+    
+    app.patch("/reservations/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const { pdfLink, reportStatus } = req.body; 
+      const updatedDoc = {
+        $set: {
+          pdfLink: pdfLink,
+          reportStatus: reportStatus,
+        },
+      };
+      const result = await reservationsCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
