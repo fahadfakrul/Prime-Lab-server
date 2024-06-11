@@ -192,7 +192,7 @@ async function run() {
       const result = await bannerCollection.find().toArray();
       res.send(result);
     });
-    app.patch("/banners/:id", async (req, res) => {
+    app.patch("/banners/:id",verifyToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       try {
@@ -218,7 +218,7 @@ async function run() {
         $inc: { slots: -1 },
       };
       const updatedTest = await testsCollection.updateOne(query, updatedDoc);
-      console.log(updatedTest);
+      // console.log(updatedTest);
       res.send({ result, updatedTest });
     });
 
@@ -229,7 +229,7 @@ async function run() {
     app.delete(
       "/reservations/:id",
       verifyToken,
-      verifyAdmin,
+      
       async (req, res) => {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -239,7 +239,8 @@ async function run() {
     );
     app.get("/reservations/:email", verifyToken,  async (req, res) => {
       const email = req.params.email;
-      const query = { email: email, reportStatus: "delivered" };
+      const status = req.query.status || "delivered"; 
+  const query = { email: email, reportStatus: status };
       const result = await reservationsCollection.find(query).toArray();
       res.send(result);
     });
@@ -257,6 +258,62 @@ async function run() {
       const result = await reservationsCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
+
+    app.get('/admin-stats',verifyToken,verifyAdmin, async (req, res) => {
+      const users = await usersCollection.estimatedDocumentCount()
+      const testItems = await testsCollection.estimatedDocumentCount()
+      const reservations = await reservationsCollection.estimatedDocumentCount()
+
+      const result = await reservationsCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {
+              $sum: '$price'
+            }
+          }
+        }
+      ]).toArray()
+      const revenue = result.length > 0 ? result[0].totalRevenue : 0;
+      res.send({
+        users, testItems , reservations, revenue
+      })
+    })
+
+    app.get('/booked-stats',async(req, res) => {
+      const testStats = await reservationsCollection.aggregate([
+        {
+          $group: {
+            _id: "$testName",
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            name: "$_id",
+            count: 1
+          }
+        }
+      ]).toArray()
+
+      const reportStats = await reservationsCollection.aggregate([
+        {
+          $group: {
+            _id: "$reportStatus",
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $project: {
+            _id: 0,
+            name: "$_id",
+            count: 1
+          }
+        }
+      ]).toArray()
+      res.send({testStats, reportStats})
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
