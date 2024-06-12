@@ -26,11 +26,14 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const testsCollection = client.db("primeLabDB").collection("tests");
     const usersCollection = client.db("primeLabDB").collection("users");
     const bannerCollection = client.db("primeLabDB").collection("banner");
+    const doctorsCollection = client.db("primeLabDB").collection("doctors");
+    const feedbackCollection = client.db("primeLabDB").collection("feedback");
+    const recommendationsCollection = client.db("primeLabDB").collection("recommendations");
     const reservationsCollection = client
       .db("primeLabDB")
       .collection("reservations");
@@ -83,7 +86,11 @@ async function run() {
       const result = await usersCollection.find().toArray();
       res.send(result);
     });
-    app.patch("/users/:email", async (req, res) => {
+    app.get("/doctors",  async (req, res) => {
+      const result = await doctorsCollection.find().toArray();
+      res.send(result);
+    });
+    app.patch("/users/:email",verifyToken, async (req, res) => {
       const user = req.body;
       const email = req.params.email;
       const filter = { email: email };
@@ -176,11 +183,30 @@ async function run() {
       res.send(result);
     });
 
+
     // get single test data
     app.get("/test/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await testsCollection.findOne(query);
+      res.send(result);
+    });
+    app.patch("/test/:id",verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          title: req.body.title,
+          category: req.body.category,
+          shortDescription: req.body.shortDescription,
+          details: req.body.details,
+          date: req.body.date,
+          slots: req.body.slots,
+          price: req.body.price,
+          image: req.body.image
+        }
+      }
+      const result = await testsCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
     app.post("/banner", verifyToken, verifyAdmin, async (req, res) => {
@@ -190,6 +216,12 @@ async function run() {
     });
     app.get("/banners", async (req, res) => {
       const result = await bannerCollection.find().toArray();
+      res.send(result);
+    });
+    app.delete("/banners/:id", verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bannerCollection.deleteOne(query);
       res.send(result);
     });
     app.patch("/banners/:id",verifyToken,verifyAdmin, async (req, res) => {
@@ -208,7 +240,15 @@ async function run() {
         console.log(error.message);
       }
     });
-
+    app.get("/recommendations", async (req, res) => {
+      const result = await recommendationsCollection.find().toArray();
+      res.send(result);
+    });
+    app.post("/feedback",  async (req, res) => {
+      const feedback = req.body;
+      const result = await feedbackCollection.insertOne(feedback);
+      res.send(result);
+    });
     app.post("/reservations", verifyToken, async (req, res) => {
       const reservations = req.body;
       const result = await reservationsCollection.insertOne(reservations);
@@ -245,7 +285,7 @@ async function run() {
       res.send(result);
     });
     
-    app.patch("/reservations/:id", async (req, res) => {
+    app.patch("/reservations/:id",verifyToken,verifyToken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
       const { pdfLink, reportStatus } = req.body; 
@@ -258,7 +298,16 @@ async function run() {
       const result = await reservationsCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
-
+    app.get("/all-tests", async (req, res) => {
+      const size = parseInt(req.query.size)
+      const page = parseInt(req.query.page) - 1
+    const result = await testsCollection.find().skip(page * size).limit(size).toArray();
+    res.send(result);
+    });
+    app.get("/tests-count", async (req, res) => {
+      const count = await testsCollection.countDocuments()
+      res.send({count});
+    });
     app.get('/admin-stats',verifyToken,verifyAdmin, async (req, res) => {
       const users = await usersCollection.estimatedDocumentCount()
       const testItems = await testsCollection.estimatedDocumentCount()
@@ -280,7 +329,7 @@ async function run() {
       })
     })
 
-    app.get('/booked-stats',async(req, res) => {
+    app.get('/booked-stats',verifyToken,verifyAdmin, async(req, res) => {
       const testStats = await reservationsCollection.aggregate([
         {
           $group: {
@@ -370,10 +419,10 @@ async function run() {
     
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
