@@ -314,6 +314,60 @@ async function run() {
       ]).toArray()
       res.send({testStats, reportStats})
     })
+   
+    app.get('/most-booked-tests', async (req, res) => {
+      try {
+        const pipeline = [
+          { 
+            "$group": { "_id": "$testId", "count": { "$sum": 1 } } 
+          },
+          { 
+            "$sort": { "count": -1 } 
+          },
+          { 
+            "$limit": 5 
+          },
+          { 
+            "$addFields": { 
+              "testId": { "$toString": "$_id" } 
+            } 
+          },
+          { 
+            "$lookup": {
+              "from": "tests",
+              "let": { "testId": "$testId" },
+              "pipeline": [
+                { "$match": { "$expr": { "$eq": [ "$_id", { "$toObjectId": "$$testId" } ] } } } 
+              ],
+              "as": "testDetails"
+            }
+          },
+          { 
+            "$unwind": "$testDetails" 
+          },
+          { 
+            "$project": {
+              "_id": "$_id",
+              "count": 1,
+              "title": "$testDetails.title",
+              "shortDescription": "$testDetails.shortDescription",
+              "price": "$testDetails.price",
+              "image": "$testDetails.image",
+              "category": "$testDetails.category",
+              "date": "$testDetails.date",
+              "slots": "$testDetails.slots"
+            }
+          }
+        ];
+        
+        const mostBookedTests = await reservationsCollection.aggregate(pipeline).toArray();
+        res.send(mostBookedTests);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send('Error retrieving most booked tests');
+      }
+    });
+    
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
